@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "onvo-drawing-board": ["../src/index"],
+      "onvo-drawing-board/*": ["../src/*"]
+    }
+  }
+}
