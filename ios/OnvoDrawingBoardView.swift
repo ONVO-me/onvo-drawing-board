@@ -1,45 +1,77 @@
 import ExpoModulesCore
-import UIKit
+import SwiftUI
 
-class OnvoDrawingBoardView: ExpoView {
-    private var drawingViewController: DrawingView?
+public class OnvoDrawingBoardView: ExpoView {
+    private var hostingController: UIHostingController<DrawingViewRepresentable>?
 
     var qualityControl: Double = 0.75 {
         didSet {
-            drawingViewController?.qualityGlobal = qualityControl
+            updateView()
         }
     }
 
     var onDismiss: (() -> Void)? {
         didSet {
-            drawingViewController?.onDismiss = onDismiss
+            updateView()
         }
     }
 
     required init(appContext: AppContext? = nil) {
         super.init(appContext: appContext)
-        setupDrawingView()
+        setupHostingController()
     }
 
-    private func setupDrawingView() {
-        // Initialize the DrawingView (UIViewController)
-        drawingViewController = DrawingView(qualityControl: qualityControl)
+    private func setupHostingController() {
+        var showDrawingView = true
 
-        // Set the onDismiss handler
-        drawingViewController?.onDismiss = { [weak self] in
-            self?.onDismiss?()
-        }
+        let drawingView = DrawingViewRepresentable(
+            showDrawingView: Binding(
+                get: { showDrawingView },
+                set: { newValue in
+                    showDrawingView = newValue
+                    if !newValue {
+                        self.onDismiss?()
+                    }
+                }
+            ),
+            qualityControl: Binding(
+                get: { self.qualityControl },
+                set: { newValue in
+                    self.qualityControl = newValue
+                }
+            )
+        )
 
-        // Add the DrawingView's view as a subview
-        if let drawingView = drawingViewController?.view {
-            drawingView.frame = self.bounds
-            drawingView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            self.addSubview(drawingView)
-        }
+        let hostingController = UIHostingController(rootView: drawingView)
+        hostingController.view.frame = self.bounds
+        hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        self.addSubview(hostingController.view)
+
+        self.hostingController = hostingController
     }
 
-    override func layoutSubviews() {
+    private func updateView() {
+        guard let hostingController = hostingController else { return }
+        hostingController.rootView = DrawingViewRepresentable(
+            showDrawingView: Binding(
+                get: { true },
+                set: { newValue in
+                    if !newValue {
+                        self.onDismiss?()
+                    }
+                }
+            ),
+            qualityControl: Binding(
+                get: { self.qualityControl },
+                set: { newValue in
+                    self.qualityControl = newValue
+                }
+            )
+        )
+    }
+
+    public override func layoutSubviews() {
         super.layoutSubviews()
-        drawingViewController?.view.frame = self.bounds
+        hostingController?.view.frame = self.bounds
     }
 }

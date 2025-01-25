@@ -1,11 +1,25 @@
-import { requireNativeView } from 'expo';
-import * as React from 'react';
+import React from 'react';
+import { requireNativeViewManager } from 'expo-modules-core';
+import { StyleProp, ViewStyle } from 'react-native';
 
-import { OnvoDrawingBoardViewProps } from './OnvoDrawingBoard.types';
+type OnvoDrawingBoardViewProps = {
+  style?: StyleProp<ViewStyle>;
+  qualityControl?: number;
+  onDismiss?: () => void;
+};
 
-const NativeView: React.ComponentType<OnvoDrawingBoardViewProps> =
-  requireNativeView('OnvoDrawingBoard');
+const NativeView = requireNativeViewManager('OnvoDrawingBoard');
 
-export default function OnvoDrawingBoardView(props: OnvoDrawingBoardViewProps) {
-  return <NativeView {...props} />;
-}
+const OnvoDrawingBoardView: React.FC<OnvoDrawingBoardViewProps> = (props) => {
+  const { style, qualityControl = 0.75, onDismiss } = props;
+
+  return (
+    <NativeView
+      style={style}
+      qualityControl={qualityControl}
+      onDismiss={onDismiss}
+    />
+  );
+};
+
+export default OnvoDrawingBoardView; // Ensure this is the default export
