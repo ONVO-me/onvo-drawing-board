@@ -1,38 +1,45 @@
 import ExpoModulesCore
-import WebKit
+import UIKit
 
-// This view will be used as a native component. Make sure to inherit from `ExpoView`
-// to apply the proper styling (e.g. border radius and shadows).
 class OnvoDrawingBoardView: ExpoView {
-  let webView = WKWebView()
-  let onLoad = EventDispatcher()
-  var delegate: WebViewDelegate?
+    private var drawingViewController: DrawingView?
 
-  required init(appContext: AppContext? = nil) {
-    super.init(appContext: appContext)
-    clipsToBounds = true
-    delegate = WebViewDelegate { url in
-      self.onLoad(["url": url])
+    var qualityControl: Double = 0.75 {
+        didSet {
+            drawingViewController?.qualityGlobal = qualityControl
+        }
     }
-    webView.navigationDelegate = delegate
-    addSubview(webView)
-  }
 
-  override func layoutSubviews() {
-    webView.frame = bounds
-  }
-}
-
-class WebViewDelegate: NSObject, WKNavigationDelegate {
-  let onUrlChange: (String) -> Void
-
-  init(onUrlChange: @escaping (String) -> Void) {
-    self.onUrlChange = onUrlChange
-  }
-
-  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation) {
-    if let url = webView.url {
-      onUrlChange(url.absoluteString)
+    var onDismiss: (() -> Void)? {
+        didSet {
+            drawingViewController?.onDismiss = onDismiss
+        }
     }
-  }
+
+    required init(appContext: AppContext? = nil) {
+        super.init(appContext: appContext)
+        setupDrawingView()
+    }
+
+    private func setupDrawingView() {
+        // Initialize the DrawingView (UIViewController)
+        drawingViewController = DrawingView(qualityControl: qualityControl)
+
+        // Set the onDismiss handler
+        drawingViewController?.onDismiss = { [weak self] in
+            self?.onDismiss?()
+        }
+
+        // Add the DrawingView's view as a subview
+        if let drawingView = drawingViewController?.view {
+            drawingView.frame = self.bounds
+            drawingView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            self.addSubview(drawingView)
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        drawingViewController?.view.frame = self.bounds
+    }
 }

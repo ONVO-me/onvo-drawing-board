@@ -1,0 +1,596 @@
+import SwiftUI
+import UIKit
+import PencilKit
+import Photos
+
+#if canImport(UniformTypeIdentifiers)
+import UniformTypeIdentifiers
+#else
+import MobileCoreServices
+#endif
+
+struct DrawingViewRepresentable: UIViewControllerRepresentable {
+    @Binding var showDrawingView: Bool
+    @Binding var qualityControl: Double
+
+    func makeUIViewController(context: Context) -> DrawingView {
+        let drawingView = DrawingView(qualityControl: qualityControl)
+        drawingView.onDismiss = {
+            showDrawingView = false
+        }
+        return drawingView
+    }
+    
+    func updateUIViewController(_ uiViewController: DrawingView, context: Context) {
+        // Update the view controller if needed
+    }
+}
+
+extension UIColor {
+    convenience init(hex: String) {
+        let scanner = Scanner(string: hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted))
+        var color: UInt64 = 0
+        scanner.scanHexInt64(&color)
+        let mask = 0x000000FF
+        let r = Int(color >> 16) & mask
+        let g = Int(color >> 8) & mask
+        let b = Int(color) & mask
+        let red = CGFloat(r) / 255.0
+        let green = CGFloat(g) / 255.0
+        let blue = CGFloat(b) / 255.0
+        self.init(red: red, green: green, blue: blue, alpha: 1)
+    }
+}
+
+class DrawingView: UIViewController, PKCanvasViewDelegate {
+    var drawing = PKDrawing()
+    var canvasView: PKCanvasView!
+    var toolPicker: PKToolPicker!
+    var isToolPickerVisible: Bool = true
+    var buttonsContainer: UIView!
+    var onDismiss: (() -> Void)?
+    var savedDrawing: PKDrawing?
+    var qualityGlobal: Double = 0.75
+    
+    init(qualityControl: Double){
+        super.init(nibName: nil, bundle: nil) // This initializes the UIViewController
+        self.qualityGlobal = qualityControl
+    }
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    // Main action button
+    let actionButton = UIButton(type: .system)
+    // Secondary buttons
+    var secondaryButtons: [UIButton] = []
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        overrideUserInterfaceStyle = .light
+        setupCanvasView()
+        setupToolPicker()
+        setupButtons()
+        print(qualityGlobal)
+        loadSavedDraws();
+        NotificationCenter.default.addObserver(self,
+                                                       selector: #selector(appDidEnterBackground),
+                                                       name: UIApplication.didEnterBackgroundNotification,
+                                                       object: nil)
+    }
+    
+    @objc func appDidEnterBackground() {
+        saveDrawingDraft()
+    }
+      
+    deinit {
+        // Remove observer when the view controller is deallocated
+        NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
+    }
+    
+    func saveDrawingDraft() {
+        guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("Failed to get documents directory.")
+            return
+        }
+        
+        let fileURL = documentsDirectory.appendingPathComponent("savedDrawing.pkdrawing")
+        
+        do {
+            let data = try canvasView.drawing.dataRepresentation()
+            try data.write(to: fileURL)
+            print("Drawing saved successfully to \(fileURL)")
+        } catch {
+            print("Failed to save drawing: \(error.localizedDescription)")
+        }
+    }
+    
+    func isDrawingTooSimple() -> Bool {
+        let minimumStrokesThreshold = 5 // Set a threshold for the minimum number of strokes required
+        let strokeCount = canvasView.drawing.strokes.count
+        return strokeCount < minimumStrokesThreshold
+    }
+
+    func loadSavedDraws() {
+        guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("Failed to get documents directory.")
+            return
+        }
+        
+        let fileURL = documentsDirectory.appendingPathComponent("savedDrawing.pkdrawing")
+        
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            do {
+                let data = try Data(contentsOf: fileURL)
+                canvasView.drawing = try PKDrawing(data: data)
+                print("Drawing loaded successfully from \(fileURL)")
+            } catch {
+                print("Failed to load drawing: \(error.localizedDescription)")
+            }
+        } else {
+            print("No saved drawing found.")
+        }
+    }
+    
+    func wipeSavedDrawing() {
+        guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            print("Failed to get documents directory.")
+            return
+        }
+        
+        let fileURL = documentsDirectory.appendingPathComponent("savedDrawing.pkdrawing")
+        
+        do {
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                try FileManager.default.removeItem(at: fileURL)
+                print("Saved drawing wiped successfully.")
+            } else {
+                print("No saved drawing to wipe.")
+            }
+        } catch {
+            print("Failed to wipe saved drawing: \(error.localizedDescription)")
+        }
+    }
+
+    func setupCanvasView() {
+        
+        canvasView = PKCanvasView()
+        canvasView.backgroundColor = .clear
+        canvasView.delegate = self
+        canvasView.minimumZoomScale = 1.0
+        canvasView.maximumZoomScale = 5.0
+        canvasView.alwaysBounceVertical = true
+        canvasView.drawingPolicy = .default
+        canvasView.overrideUserInterfaceStyle = .light
+        view.addSubview(canvasView)
+    }
+    
+    func setupToolPicker() {
+        toolPicker = PKToolPicker()
+        toolPicker.setVisible(isToolPickerVisible, forFirstResponder: canvasView)
+        toolPicker.addObserver(canvasView)
+        canvasView.becomeFirstResponder()
+        if #available(iOS 14.0, *) {
+            toolPicker = PKToolPicker()
+        } else {
+            toolPicker = PKToolPicker.shared(for: view.window!)
+        }
+        toolPicker.overrideUserInterfaceStyle = .light // Force light mode
+        toolPicker.setVisible(true, forFirstResponder: canvasView)
+        toolPicker.addObserver(canvasView)
+        canvasView.becomeFirstResponder()
+        
+    }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        return .portrait
+    }
+    func setupButtons() {
+        let containerHeight: CGFloat = 44
+        let containerWidth: CGFloat = view.bounds.width * 0.88
+        var containerY: CGFloat = 20
+        
+        buttonsContainer = UIView(frame: CGRect(
+            x: (view.bounds.width - containerWidth) / 2,
+            y: containerY,
+            width: containerWidth,
+            height: containerHeight
+        ))
+        
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            buttonsContainer.transform = CGAffineTransform(rotationAngle: .pi / 2)
+            buttonsContainer.frame = CGRect(
+                x: view.bounds.width - containerHeight - 20,
+                y: (view.bounds.height - containerWidth) / 2,
+                width: containerHeight,
+                height: containerWidth
+            )
+        }
+        
+        buttonsContainer.layer.zPosition = 1
+        
+        
+        
+        if buttonsContainer.superview == nil {
+            view.addSubview(buttonsContainer)
+        }
+        
+        setupSecondaryButtons(containerHeight: containerHeight,containerWidth: containerWidth)
+        
+        // Add the placeholder label if the device is an iPhone
+        if UIDevice.current.userInterfaceIdiom == .phone {
+//            addPlaceholderLabel()
+        }
+    }
+    
+    @objc func toggleActionButton() {
+        UIView.animate(withDuration: 0.3) {
+            self.buttonsContainer.isHidden = !self.buttonsContainer.isHidden
+        }
+        let buttonImageName = self.buttonsContainer.isHidden ? "square.grid.2x2" : "xmark"
+        actionButton.setImage(UIImage(systemName: buttonImageName), for: .normal)
+    }
+    
+    func setupSecondaryButtons(containerHeight: CGFloat,containerWidth: CGFloat) {
+        let buttonInfo: [(id: String, iconName: String, action: Selector)] = [
+            ("logo", "ico", #selector(goHome)),
+            ("undo", "undo", #selector(undoAction)),
+            ("redo", "redo", #selector(redoAction)),
+            ("draft", "draft", #selector(showDrafts)),
+            ("tools", "penruller", #selector(toggleToolPickerVisibility)),
+            ("save", "save", #selector(saveDrawing))
+        ]
+        let numberOfButtons = buttonInfo.count;
+        
+        for (index, info) in buttonInfo.enumerated() {
+            let button = UIButton(type: .system)
+            let action = info.action
+            let buttonWidth = containerWidth / CGFloat(numberOfButtons)
+            
+            button.translatesAutoresizingMaskIntoConstraints = false
+            
+            
+            button.addTarget(self, action: action, for: .touchUpInside)
+            
+            var imageSize: CGFloat = 24
+            if(info.id == "logo"){
+                imageSize = 50
+                button.setTitle("Close",for: .normal)
+            }else {
+                if let image = UIImage(named: info.iconName)?.withRenderingMode(.alwaysOriginal) {
+                    button.setImage(image, for: .normal)
+                }
+            }
+            
+            button.imageEdgeInsets = UIEdgeInsets(
+                top: (containerHeight - imageSize) / 2,
+                left: (buttonWidth - imageSize) / 2,
+                bottom: (containerHeight - imageSize) / 2,
+                right: (buttonWidth - imageSize) / 2
+            )
+            
+            buttonsContainer.addSubview(button)
+            
+            NSLayoutConstraint.activate([
+                button.leadingAnchor.constraint(equalTo: buttonsContainer.leadingAnchor, constant: CGFloat(index) * (containerWidth / CGFloat(numberOfButtons))),
+                button.widthAnchor.constraint(equalToConstant: containerWidth / CGFloat(numberOfButtons)),
+                button.topAnchor.constraint(equalTo: buttonsContainer.topAnchor),
+                button.heightAnchor.constraint(equalToConstant: containerHeight)
+            ])
+            NSLayoutConstraint.activate([
+                button.heightAnchor.constraint(equalToConstant: containerHeight)
+            ])
+            
+        }
+    }
+    
+    
+    func renderDrawingInLightModeAndRotate(drawing: PKDrawing, size: CGSize, isRotated: Bool) -> UIImage? {
+        // Determine the rotated size
+        let rotatedSize = isRotated ? CGSize(width: size.height, height: size.width) : size
+        let renderer = UIGraphicsImageRenderer(size: rotatedSize, format: UIGraphicsImageRendererFormat.default())
+
+        let image = renderer.image { context in
+            context.cgContext.saveGState()
+
+            // Set light mode rendering
+            overrideUserInterfaceStyle = .light
+            
+            if isRotated {
+                // Rotate context around the center of the image
+                context.cgContext.translateBy(x: rotatedSize.width / 2, y: rotatedSize.height / 2)
+                context.cgContext.rotate(by: .pi / 2)
+                
+                // Adjust the origin to the top-left of the rotated image
+                context.cgContext.translateBy(x: -size.width / 2, y: -size.height / 2)
+            }
+
+            // Render the drawing without resizing
+            let drawingImage = drawing.image(from: CGRect(origin: .zero, size: size), scale: UIScreen.main.scale)
+            drawingImage.draw(in: CGRect(origin: .zero, size: size))
+
+            context.cgContext.restoreGState()
+        }
+
+        return image
+    }
+
+
+    @objc func saveDrawing() {
+        
+        if(isDrawingTooSimple()){
+            let errorAlert = UIAlertController(title: "Draw more", message: "Please draw more strokes before saving the canvas", preferredStyle: .alert)
+            errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
+            self.present(errorAlert, animated: true)
+            return;
+        }
+    
+           let imageSize = canvasView.bounds.size
+        guard let renderedImageRotated = renderDrawingInLightModeAndRotate(drawing: canvasView.drawing, size: imageSize,isRotated: true) else {
+               print("Failed to render drawing in light mode context.")
+               return
+           }
+        
+        guard let renderedImage = renderDrawingInLightModeAndRotate(drawing: canvasView.drawing, size: imageSize,isRotated: false) else {
+               print("Failed to render drawing in light mode context.")
+               return
+           }
+        
+        guard let rawImage = renderedImageRotated.pngData() else {
+               print("Failed to render drawing in light mode context.")
+               return
+           }
+           
+        guard let compressedPngData = compressImage(renderedImageRotated) else {
+               print("Failed to compress image to PNG data.")
+               return
+           }
+        
+        // Example URL - Replace with your actual endpoint
+        let uploadUrlString = "https://cdn.onvo.me/api/ios/"
+        
+        // Upload the PNG data
+        ImageUploader.uploadImage((qualityGlobal == 1 ? rawImage : compressedPngData), toURL: uploadUrlString, draw: "sub", user: "2", hide: true, viewController: self) { [weak self] (success) in
+            DispatchQueue.main.async {
+                if success {
+                    self?.wipeSavedDrawing()
+                    let successAlert = UIAlertController(title: "Upload Successful", message: "want save it to your device ?", preferredStyle: .alert)
+                    successAlert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
+                        self?.saveImageToPhotos(image: renderedImage)
+                    }))
+                    successAlert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { _ in
+                        self?.forecClose()
+                    }))
+                    self?.present(successAlert, animated: true)
+                    
+                } else {
+                    let successAlert = UIAlertController(title: "Upload Faild", message: "we coludn't upload image, want save it to your device ?", preferredStyle: .alert)
+                    successAlert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
+                        self?.saveImageToPhotos(image: renderedImage)
+                    }))
+                    successAlert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+                    self?.present(successAlert, animated: true)
+                }
+            }
+        }
+    }
+    
+    func saveImageToPhotos(image: UIImage) {
+        PHPhotoLibrary.requestAuthorization { status in
+            switch status {
+            case .authorized:
+                UIImageWriteToSavedPhotosAlbum(image, self, #selector(self.image(_:didFinishSavingWithError:contextInfo:)), nil)
+            case .denied, .restricted, .notDetermined:
+                print("Permission to access photo library was denied or not determined.")
+            case .limited:
+                print("Permission to access photo library was limited.")
+            @unknown default:
+                print("Unknown photo library authorization status.")
+            }
+        }
+    }
+
+    @objc func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
+        if let error = error {
+            // Handle any errors
+            let errorAlert = UIAlertController(title: "Save Error", message: error.localizedDescription, preferredStyle: .alert)
+            errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
+            self.present(errorAlert, animated: true)
+        } else {
+            // Successfully saved the image
+            let successAlert = UIAlertController(title: "Saved!", message: "Your image has been saved to your photos.", preferredStyle: .alert)
+            successAlert.addAction(UIAlertAction(title: "OK", style: .default))
+            self.present(successAlert, animated: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.forecClose()
+            }
+        }
+    }
+    
+    func compressImage(_ image: UIImage,value: Double = 0.75) -> Data? {
+        let options: [NSString: Any] = [
+            kCGImageDestinationLossyCompressionQuality: value, // Adjust the compression quality (0.0 to 1.0)
+        ]
+        guard let imageData = image.pngData(), let source = CGImageSourceCreateWithData(imageData as CFData, nil) else {
+            return nil
+        }
+        let mutableData = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(mutableData, UTType.png.identifier as CFString, 1, nil) else {
+            return nil
+        }
+        CGImageDestinationAddImageFromSource(destination, source, 0, options as CFDictionary)
+        CGImageDestinationFinalize(destination)
+        return mutableData as Data
+    }
+    
+    
+    @objc func showDrafts(){
+        let alert = UIAlertController(title: "Comming soon", message: "You will have full access of your drafts in next updates, for now your work will be saved untill you export or save image", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(alert, animated: true)
+    }
+    
+    func showUploadSuccessMessage() {
+        // Call this function to update your UI upon successful upload
+        // Example: Show an alert message
+        let alert = UIAlertController(title: "Upload Successful", message: "Your drawing has been uploaded.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        present(alert, animated: true)
+    }
+    
+    @objc func toggleToolPickerVisibility() {
+        // Toggle the visibility based on the flag
+        isToolPickerVisible = !isToolPickerVisible
+        toolPicker.setVisible(isToolPickerVisible, forFirstResponder: canvasView)
+        if isToolPickerVisible {
+            canvasView.becomeFirstResponder()
+        }
+    }
+    
+    @objc func undoAction() {
+        if canvasView.undoManager?.canUndo == true {
+            canvasView.undoManager?.undo()
+        }
+    }
+    
+    func setAppAppearance(to style: UIUserInterfaceStyle) {
+        if let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows.first {
+            window.overrideUserInterfaceStyle = style
+        }
+    }
+    
+    func forecClose(){
+        UIView.animate(withDuration: 0.3, animations: {
+            self.view.transform = CGAffineTransform(translationX: 0, y: self.view.bounds.height)
+        }) { _ in
+            self.view.isHidden = true
+            self.onDismiss?()
+        }
+        setAppAppearance(to: .light)
+    }
+    
+    @objc func goHome() {
+        if(isDrawingTooSimple()){
+            forecClose();
+        }else {
+            let successAlert = UIAlertController(title: "Are you sure?", message: "You have uncomplete work, want save it as draft before close?", preferredStyle: .alert)
+            successAlert.addAction(UIAlertAction(title: "Save as draft", style: .default, handler: { _ in
+                self.saveDrawingDraft()
+            }))
+            successAlert.addAction(UIAlertAction(title: "Stay in board", style: .default, handler: nil))
+            
+            successAlert.addAction(UIAlertAction(title: "Close without save", style: .cancel, handler: { _ in
+                self.forecClose()
+            }))
+            present(successAlert, animated: true)
+        }
+        
+    }
+    
+    @objc func redoAction() {
+        if canvasView.undoManager?.canRedo == true {
+            canvasView.undoManager?.redo()
+        }
+    }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        
+        // Assuming an estimated tool picker height (adjust as necessary)
+        let estimatedToolPickerHeight: CGFloat = 150 // Adjust this value if needed
+        let safeAreaInsets = view.safeAreaInsets
+        let topInset = safeAreaInsets.top + 60 // Get the top safe area inset
+        
+        let availableHeight = view.bounds.height - estimatedToolPickerHeight - topInset
+        let width = availableHeight / 2
+        let canvasFrame = CGRect(
+            x: (view.bounds.width - width) / 2,
+            y: topInset, // Use the topInset to add margin from the notch
+            width: width,
+            height: availableHeight
+        )
+        canvasView.frame = canvasFrame
+        // Create and add a transparent pattern background view
+        let patternView = UIView(frame: canvasView.bounds)
+        patternView.backgroundColor = UIColor(patternImage: createTransparentPattern())
+        patternView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        
+        // Insert the pattern view below the drawing layer
+        if let drawingView = canvasView.subviews.first {
+            canvasView.insertSubview(patternView, belowSubview: drawingView)
+        } else {
+            canvasView.addSubview(patternView)
+        }
+        
+        drawText(on: patternView)
+    }
+    
+    func drawText(on view: UIView) {
+        let text = "Drawing direction "
+        let textColor = UIColor(hex: "#cccccc")
+        let fontName = "Gilroy-Regular"
+        let fontSize: CGFloat = 25
+        let padding: CGFloat = 30
+
+        // Create a label for the text
+        let label = UILabel()
+        label.text = text
+        label.font = UIFont(name: fontName, size: fontSize)
+        label.textColor = textColor
+        label.sizeToFit()
+
+        // Create and add the image icon
+        let iconImageView = UIImageView()
+        if let iconImage = UIImage(named: "arrow_right")?.withRenderingMode(.alwaysTemplate) {
+            iconImageView.image = iconImage
+            iconImageView.tintColor = textColor
+            iconImageView.frame.size = CGSize(width: 24, height: 24)
+            iconImageView.contentMode = .scaleAspectFit
+        }
+
+        // Rotate the text and icon
+        let rotationAngle = -CGFloat.pi / 2
+        label.transform = CGAffineTransform(rotationAngle: rotationAngle)
+        iconImageView.transform = CGAffineTransform(rotationAngle: rotationAngle)
+
+        // Calculate total height for both elements
+        let totalHeight = label.frame.width + 5 + iconImageView.frame.height
+
+        // Adjust the label and icon positions for left alignment
+        let yPosition = (view.bounds.height - totalHeight) / 2
+        label.frame.origin = CGPoint(x: padding, y: yPosition)
+        iconImageView.frame.origin = CGPoint(x: padding, y: yPosition + label.frame.width - 50)
+
+        // Create a container view and add the label and icon
+        let containerView = UIView(frame: view.bounds)
+        containerView.addSubview(label)
+        containerView.addSubview(iconImageView)
+        view.addSubview(containerView)
+    }
+
+
+    func createTransparentPattern() -> UIImage {
+        let squareSize: CGFloat = 10 // Size of each square in the pattern
+        let lightColor = UIColor(hex: "#ffffff") // Transparent background
+        let darkColor = UIColor(hex: "#eeeeee") // Dark square color with the desired hex value
+
+        let imageSize = CGSize(width: squareSize * 2, height: squareSize * 2)
+        UIGraphicsBeginImageContextWithOptions(imageSize, false, 0)
+
+        let context = UIGraphicsGetCurrentContext()!
+
+        // Draw the light squares (transparent)
+        context.setFillColor(lightColor.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: squareSize, height: squareSize))
+        context.fill(CGRect(x: squareSize, y: squareSize, width: squareSize, height: squareSize))
+
+        // Draw the dark squares
+        context.setFillColor(darkColor.cgColor)
+        context.fill(CGRect(x: squareSize, y: 0, width: squareSize, height: squareSize))
+        context.fill(CGRect(x: 0, y: squareSize, width: squareSize, height: squareSize))
+
+        let patternImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        return patternImage!
+    }
+}
