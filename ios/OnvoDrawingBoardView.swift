@@ -22,18 +22,7 @@ public class OnvoDrawingBoardView: ExpoView {
     }
 
     private func setupHostingController() {
-        var showDrawingView = true
-
         let drawingView = DrawingViewRepresentable(
-            showDrawingView: Binding(
-                get: { showDrawingView },
-                set: { newValue in
-                    showDrawingView = newValue
-                    if !newValue {
-                        self.onDismiss?()
-                    }
-                }
-            ),
             qualityControl: Binding(
                 get: { self.qualityControl },
                 set: { newValue in
@@ -53,14 +42,6 @@ public class OnvoDrawingBoardView: ExpoView {
     private func updateView() {
         guard let hostingController = hostingController else { return }
         hostingController.rootView = DrawingViewRepresentable(
-            showDrawingView: Binding(
-                get: { true },
-                set: { newValue in
-                    if !newValue {
-                        self.onDismiss?()
-                    }
-                }
-            ),
             qualityControl: Binding(
                 get: { self.qualityControl },
                 set: { newValue in

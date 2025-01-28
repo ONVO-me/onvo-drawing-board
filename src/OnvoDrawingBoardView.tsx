@@ -1,6 +1,7 @@
 import React from 'react';
 import { requireNativeViewManager } from 'expo-modules-core';
 import { StyleProp, ViewStyle } from 'react-native';
+export * from './controler'
 
 type OnvoDrawingBoardViewProps = {
   style?: StyleProp<ViewStyle>;
@@ -22,4 +23,4 @@ const OnvoDrawingBoardView: React.FC<OnvoDrawingBoardViewProps> = (props) => {
   );
 };
 
-export default OnvoDrawingBoardView; // Ensure this is the default export
+export default OnvoDrawingBoardView; 

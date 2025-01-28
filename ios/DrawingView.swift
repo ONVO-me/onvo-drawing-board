@@ -10,17 +10,15 @@ import MobileCoreServices
 #endif
 
 struct DrawingViewRepresentable: UIViewControllerRepresentable {
-    @Binding var showDrawingView: Bool
     @Binding var qualityControl: Double
+    static var currentInstance: DrawingView?
 
     func makeUIViewController(context: Context) -> DrawingView {
         let drawingView = DrawingView(qualityControl: qualityControl)
-        drawingView.onDismiss = {
-            showDrawingView = false
-        }
+        DrawingViewRepresentable.currentInstance = drawingView // Store the reference
         return drawingView
     }
-    
+
     func updateUIViewController(_ uiViewController: DrawingView, context: Context) {
         // Update the view controller if needed
     }
@@ -56,21 +54,19 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
         super.init(nibName: nil, bundle: nil) // This initializes the UIViewController
         self.qualityGlobal = qualityControl
     }
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
     // Main action button
-    let actionButton = UIButton(type: .system)
     // Secondary buttons
-    var secondaryButtons: [UIButton] = []
     
     override func viewDidLoad() {
         super.viewDidLoad()
         overrideUserInterfaceStyle = .light
         setupCanvasView()
         setupToolPicker()
-        setupButtons()
-        print(qualityGlobal)
         loadSavedDraws();
         NotificationCenter.default.addObserver(self,
                                                        selector: #selector(appDidEnterBackground),
@@ -83,7 +79,6 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
     }
       
     deinit {
-        // Remove observer when the view controller is deallocated
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
     
@@ -183,105 +178,6 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         return .portrait
     }
-    func setupButtons() {
-        let containerHeight: CGFloat = 44
-        let containerWidth: CGFloat = view.bounds.width * 0.88
-        var containerY: CGFloat = 20
-        
-        buttonsContainer = UIView(frame: CGRect(
-            x: (view.bounds.width - containerWidth) / 2,
-            y: containerY,
-            width: containerWidth,
-            height: containerHeight
-        ))
-        
-        if UIDevice.current.userInterfaceIdiom == .pad {
-            buttonsContainer.transform = CGAffineTransform(rotationAngle: .pi / 2)
-            buttonsContainer.frame = CGRect(
-                x: view.bounds.width - containerHeight - 20,
-                y: (view.bounds.height - containerWidth) / 2,
-                width: containerHeight,
-                height: containerWidth
-            )
-        }
-        
-        buttonsContainer.layer.zPosition = 1
-        
-        
-        
-        if buttonsContainer.superview == nil {
-            view.addSubview(buttonsContainer)
-        }
-        
-        setupSecondaryButtons(containerHeight: containerHeight,containerWidth: containerWidth)
-        
-        // Add the placeholder label if the device is an iPhone
-        if UIDevice.current.userInterfaceIdiom == .phone {
-//            addPlaceholderLabel()
-        }
-    }
-    
-    @objc func toggleActionButton() {
-        UIView.animate(withDuration: 0.3) {
-            self.buttonsContainer.isHidden = !self.buttonsContainer.isHidden
-        }
-        let buttonImageName = self.buttonsContainer.isHidden ? "square.grid.2x2" : "xmark"
-        actionButton.setImage(UIImage(systemName: buttonImageName), for: .normal)
-    }
-    
-    func setupSecondaryButtons(containerHeight: CGFloat,containerWidth: CGFloat) {
-        let buttonInfo: [(id: String, iconName: String, action: Selector)] = [
-            ("logo", "ico", #selector(goHome)),
-            ("undo", "undo", #selector(undoAction)),
-            ("redo", "redo", #selector(redoAction)),
-            ("draft", "draft", #selector(showDrafts)),
-            ("tools", "penruller", #selector(toggleToolPickerVisibility)),
-            ("save", "save", #selector(saveDrawing))
-        ]
-        let numberOfButtons = buttonInfo.count;
-        
-        for (index, info) in buttonInfo.enumerated() {
-            let button = UIButton(type: .system)
-            let action = info.action
-            let buttonWidth = containerWidth / CGFloat(numberOfButtons)
-            
-            button.translatesAutoresizingMaskIntoConstraints = false
-            
-            
-            button.addTarget(self, action: action, for: .touchUpInside)
-            
-            var imageSize: CGFloat = 24
-            if(info.id == "logo"){
-                imageSize = 50
-                button.setTitle("Close",for: .normal)
-            }else {
-                if let image = UIImage(named: info.iconName)?.withRenderingMode(.alwaysOriginal) {
-                    button.setImage(image, for: .normal)
-                }
-            }
-            
-            button.imageEdgeInsets = UIEdgeInsets(
-                top: (containerHeight - imageSize) / 2,
-                left: (buttonWidth - imageSize) / 2,
-                bottom: (containerHeight - imageSize) / 2,
-                right: (buttonWidth - imageSize) / 2
-            )
-            
-            buttonsContainer.addSubview(button)
-            
-            NSLayoutConstraint.activate([
-                button.leadingAnchor.constraint(equalTo: buttonsContainer.leadingAnchor, constant: CGFloat(index) * (containerWidth / CGFloat(numberOfButtons))),
-                button.widthAnchor.constraint(equalToConstant: containerWidth / CGFloat(numberOfButtons)),
-                button.topAnchor.constraint(equalTo: buttonsContainer.topAnchor),
-                button.heightAnchor.constraint(equalToConstant: containerHeight)
-            ])
-            NSLayoutConstraint.activate([
-                button.heightAnchor.constraint(equalToConstant: containerHeight)
-            ])
-            
-        }
-    }
-    
     
     func renderDrawingInLightModeAndRotate(drawing: PKDrawing, size: CGSize, isRotated: Bool) -> UIImage? {
         // Determine the rotated size
@@ -314,7 +210,7 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
     }
 
 
-    @objc func saveDrawing() {
+    func saveDrawing(uploadUrlString: String) {
         
         if(isDrawingTooSimple()){
             let errorAlert = UIAlertController(title: "Draw more", message: "Please draw more strokes before saving the canvas", preferredStyle: .alert)
@@ -343,9 +239,6 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
                print("Failed to compress image to PNG data.")
                return
            }
-        
-        // Example URL - Replace with your actual endpoint
-        let uploadUrlString = "https://cdn.onvo.me/api/ios/"
         
         // Upload the PNG data
         ImageUploader.uploadImage((qualityGlobal == 1 ? rawImage : compressedPngData), toURL: uploadUrlString, draw: "sub", user: "2", hide: true, viewController: self) { [weak self] (success) in
@@ -422,7 +315,7 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
     }
     
     
-    @objc func showDrafts(){
+    func showDrafts(){
         let alert = UIAlertController(title: "Comming soon", message: "You will have full access of your drafts in next updates, for now your work will be saved untill you export or save image", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
         present(alert, animated: true)
@@ -436,7 +329,7 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
         present(alert, animated: true)
     }
     
-    @objc func toggleToolPickerVisibility() {
+    func toggleToolPickerVisibility() {
         // Toggle the visibility based on the flag
         isToolPickerVisible = !isToolPickerVisible
         toolPicker.setVisible(isToolPickerVisible, forFirstResponder: canvasView)
@@ -445,7 +338,7 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
         }
     }
     
-    @objc func undoAction() {
+    func undoAction() {
         if canvasView.undoManager?.canUndo == true {
             canvasView.undoManager?.undo()
         }
@@ -468,26 +361,8 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
         }
         setAppAppearance(to: .light)
     }
-    
-    @objc func goHome() {
-        if(isDrawingTooSimple()){
-            forecClose();
-        }else {
-            let successAlert = UIAlertController(title: "Are you sure?", message: "You have uncomplete work, want save it as draft before close?", preferredStyle: .alert)
-            successAlert.addAction(UIAlertAction(title: "Save as draft", style: .default, handler: { _ in
-                self.saveDrawingDraft()
-            }))
-            successAlert.addAction(UIAlertAction(title: "Stay in board", style: .default, handler: nil))
-            
-            successAlert.addAction(UIAlertAction(title: "Close without save", style: .cancel, handler: { _ in
-                self.forecClose()
-            }))
-            present(successAlert, animated: true)
-        }
         
-    }
-    
-    @objc func redoAction() {
+    func redoAction() {
         if canvasView.undoManager?.canRedo == true {
             canvasView.undoManager?.redo()
         }
@@ -525,7 +400,7 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
     }
     
     func drawText(on view: UIView) {
-        let text = "Drawing direction "
+        let text = "Drawing direction ->"
         let textColor = UIColor(hex: "#cccccc")
         let fontName = "Gilroy-Regular"
         let fontSize: CGFloat = 25

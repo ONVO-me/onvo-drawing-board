@@ -1,6 +1,6 @@
 {
   "name": "onvo-drawing-board",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Official onvo drawing board",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -35,6 +35,9 @@
     "expo": "~52.0.0",
     "react-native": "0.76.0"
   },
+  "assetBundlePatterns": [
+    "assets/*.png"
+  ],
   "peerDependencies": {
     "expo": "*",
     "react": "*",
