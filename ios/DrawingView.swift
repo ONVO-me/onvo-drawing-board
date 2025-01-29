@@ -215,13 +215,6 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
 var outletImage: Data? // Make it optional to avoid crashes if it's nil
 
 func saveDrawing(uploadUrlString: String, uploadToken: String, completion: @escaping (String?) -> Void) {
-        
-        if(isDrawingTooSimple()){
-            let errorAlert = UIAlertController(title: "Draw more", message: "Please draw more strokes before saving the canvas", preferredStyle: .alert)
-            errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
-            self.present(errorAlert, animated: true)
-            return;
-        }
     
            let imageSize = canvasView.bounds.size
         guard let renderedImageRotated = renderDrawingInLightModeAndRotate(drawing: canvasView.drawing, size: imageSize,isRotated: true) else {
@@ -358,6 +351,7 @@ func saveImageToPhotos() {
             canvasView.undoManager?.redo()
         }
     }
+    var isAdded: Bool = false
 override func viewDidLayoutSubviews() {
        super.viewDidLayoutSubviews()
         
@@ -375,9 +369,12 @@ override func viewDidLayoutSubviews() {
 
         // Set the frame of patternView to match canvasView but keep it outside the ScrollView
         patternView.frame = canvasFrame
+        if(!isAdded){
+        drawText(on: patternView)
+            isAdded = true
+        }
 
         // Draw text on the patternView if needed
-        drawText(on: patternView)
     }
     func drawText(on view: UIView) {
         let text = "Drawing direction ->"

@@ -59,7 +59,13 @@ export const saveImageToPhotos = async () => {
     console.error('Error in saveDrawingDraft:', error);
   }
 };
-
+export const isDrawingTooSimple = async () => {
+  try {
+    await OnvoDrawingBoardModule.isDrawingTooSimple();
+  } catch (error) {
+    console.error('Error in saveDrawingDraft:', error);
+  }
+};
 
 export const saveDrawing = async (uploadUrl, uploadToken) => {
   try {

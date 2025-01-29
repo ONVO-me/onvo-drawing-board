@@ -9,6 +9,10 @@ struct ImageUploader {
             completion("{\"error\" : \"Invalid URL.\"}")
             return
         }
+         if imageData.isEmpty {
+        completion("{\"error\" : \"No image.\"}")
+        return
+    }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -18,9 +22,12 @@ struct ImageUploader {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         let httpBody = NSMutableData()
+        httpBody.append(convertFormField(named: "draw", value: "submit", using: boundary))
         httpBody.append(convertFormField(named: "api", value: "native", using: boundary))
         httpBody.append(convertFileData(fieldName: "canvasImage", fileName: "image.png", mimeType: "image/png", fileData: imageData, using: boundary))
-        httpBody.appendString("--\(boundary)--\r\n")
+        httpBody.appendString("\r\n--\(boundary)--\r\n")
+        request.setValue("\(httpBody.length)", forHTTPHeaderField: "Content-Length")
+
         request.httpBody = httpBody as Data
 
         DispatchQueue.main.async {
@@ -45,7 +52,7 @@ struct ImageUploader {
             ])
 
             viewController.present(alert, animated: true, completion: {
-                let task = URLSession.shared.uploadTask(with: request, from: httpBody as Data) { data, response, error in
+               let task = URLSession.shared.dataTask(with: request) { data, response, error in
                     DispatchQueue.main.async {
                         alert.dismiss(animated: true, completion: nil)
                     }

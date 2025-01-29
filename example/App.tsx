@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
 import { Alert, SafeAreaView, StyleSheet } from 'react-native';
-import OnvoDrawingBoardView,{saveDrawing, toggleToolPickerVisibility} from 'onvo-drawing-board'; // Import the component
+import OnvoDrawingBoardView,{saveDrawing, toggleToolPickerVisibility} from 'onvo-drawing-board';
 
 export default function App() {
   useEffect(() => {
     const func = async () => {
-     const response = await saveDrawing('test','test')
-     Alert.alert('test',response)
+     const response = await saveDrawing('https://cdn.onvo.me/api/ios/','da')
+     Alert.alert('tecccst',response)
     }
     func()
   },[])

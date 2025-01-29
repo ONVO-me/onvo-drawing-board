@@ -63,11 +63,17 @@ public class OnvoDrawingBoardModule: Module {
             }
         }
         
-
         Function("saveDrawingDraft") {
             DispatchQueue.main.async {
                 if let drawingView = DrawingViewRepresentable.currentInstance {
                     drawingView.saveDrawingDraft()
+                }
+            }
+        }
+        Function("isDrawingTooSimple") {
+            DispatchQueue.main.async {
+                if let drawingView = DrawingViewRepresentable.currentInstance {
+                    drawingView.isDrawingTooSimple()
                 }
             }
         }
