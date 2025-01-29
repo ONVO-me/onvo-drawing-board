@@ -70,13 +70,13 @@ public class OnvoDrawingBoardModule: Module {
                 }
             }
         }
-        Function("isDrawingTooSimple") {
-            DispatchQueue.main.async {
-                if let drawingView = DrawingViewRepresentable.currentInstance {
-                    drawingView.isDrawingTooSimple()
-                }
-            }
-        }
+       Function("isDrawingTooSimple") { () throws -> Bool in
+    if let drawingView = DrawingViewRepresentable.currentInstance {
+        return drawingView.isDrawingTooSimple()
+    }
+    return false // Default value in case there's no instance
+}
+
         
 AsyncFunction("saveDrawing") { (uploadUrlString: String, uploadToken: String) async throws -> String in
     return try await withCheckedThrowingContinuation { continuation in
