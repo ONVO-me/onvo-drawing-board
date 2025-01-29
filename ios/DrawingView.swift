@@ -49,7 +49,8 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
     var onDismiss: (() -> Void)?
     var savedDrawing: PKDrawing?
     var qualityGlobal: Double = 0.75
-    
+    private let patternView = UIView()
+
     init(qualityControl: Double){
         super.init(nibName: nil, bundle: nil) // This initializes the UIViewController
         self.qualityGlobal = qualityControl
@@ -67,7 +68,10 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
         overrideUserInterfaceStyle = .light
         setupCanvasView()
         setupToolPicker()
-        loadSavedDraws();
+        loadSavedDraws()
+        patternView.backgroundColor = UIColor(patternImage: createTransparentPattern())
+        patternView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.insertSubview(patternView, belowSubview: canvasView)
         NotificationCenter.default.addObserver(self,
                                                        selector: #selector(appDidEnterBackground),
                                                        name: UIApplication.didEnterBackgroundNotification,
@@ -147,7 +151,6 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
     }
 
     func setupCanvasView() {
-        
         canvasView = PKCanvasView()
         canvasView.backgroundColor = .clear
         canvasView.delegate = self
@@ -209,8 +212,9 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
         return image
     }
 
+var outletImage: Data? // Make it optional to avoid crashes if it's nil
 
-    func saveDrawing(uploadUrlString: String) {
+func saveDrawing(uploadUrlString: String, uploadToken: String, completion: @escaping (String?) -> Void) {
         
         if(isDrawingTooSimple()){
             let errorAlert = UIAlertController(title: "Draw more", message: "Please draw more strokes before saving the canvas", preferredStyle: .alert)
@@ -234,52 +238,39 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
                print("Failed to render drawing in light mode context.")
                return
            }
-           
+           outletImage = rawImage
         guard let compressedPngData = compressImage(renderedImageRotated) else {
                print("Failed to compress image to PNG data.")
                return
            }
         
         // Upload the PNG data
-        ImageUploader.uploadImage((qualityGlobal == 1 ? rawImage : compressedPngData), toURL: uploadUrlString, draw: "sub", user: "2", hide: true, viewController: self) { [weak self] (success) in
-            DispatchQueue.main.async {
-                if success {
-                    self?.wipeSavedDrawing()
-                    let successAlert = UIAlertController(title: "Upload Successful", message: "want save it to your device ?", preferredStyle: .alert)
-                    successAlert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
-                        self?.saveImageToPhotos(image: renderedImage)
-                    }))
-                    successAlert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: { _ in
-                        self?.forecClose()
-                    }))
-                    self?.present(successAlert, animated: true)
-                    
-                } else {
-                    let successAlert = UIAlertController(title: "Upload Faild", message: "we coludn't upload image, want save it to your device ?", preferredStyle: .alert)
-                    successAlert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
-                        self?.saveImageToPhotos(image: renderedImage)
-                    }))
-                    successAlert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
-                    self?.present(successAlert, animated: true)
-                }
-            }
-        }
+       ImageUploader.uploadImage((qualityGlobal == 1 ? rawImage : compressedPngData), toURL: uploadUrlString,user: "", token: uploadToken, viewController: self) { [weak self] responseText in
+       completion(responseText)
+    }
     }
     
-    func saveImageToPhotos(image: UIImage) {
-        PHPhotoLibrary.requestAuthorization { status in
-            switch status {
-            case .authorized:
+func saveImageToPhotos() {
+    PHPhotoLibrary.requestAuthorization { [weak self] status in
+        guard let self = self else { return } // Unwrap `self` first
+
+        switch status {
+        case .authorized:
+            DispatchQueue.main.async {
+                guard let imageData = self.outletImage, let image = UIImage(data: imageData) else {
+                    print("Failed to convert Data to UIImage or outletImage is nil.")
+                    return
+                }
                 UIImageWriteToSavedPhotosAlbum(image, self, #selector(self.image(_:didFinishSavingWithError:contextInfo:)), nil)
-            case .denied, .restricted, .notDetermined:
-                print("Permission to access photo library was denied or not determined.")
-            case .limited:
-                print("Permission to access photo library was limited.")
-            @unknown default:
-                print("Unknown photo library authorization status.")
             }
+        case .denied, .restricted, .notDetermined, .limited:
+            print("Permission to access photo library was denied or limited.")
+        @unknown default:
+            print("Unknown photo library authorization status.")
         }
     }
+}
+
 
     @objc func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
         if let error = error {
@@ -367,38 +358,27 @@ class DrawingView: UIViewController, PKCanvasViewDelegate {
             canvasView.undoManager?.redo()
         }
     }
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
+override func viewDidLayoutSubviews() {
+       super.viewDidLayoutSubviews()
         
-        // Assuming an estimated tool picker height (adjust as necessary)
-        let estimatedToolPickerHeight: CGFloat = 150 // Adjust this value if needed
-        let safeAreaInsets = view.safeAreaInsets
-        let topInset = safeAreaInsets.top + 60 // Get the top safe area inset
-        
-        let availableHeight = view.bounds.height - estimatedToolPickerHeight - topInset
+        let estimatedToolPickerHeight: CGFloat = 100
+        let availableHeight = view.bounds.height - estimatedToolPickerHeight
         let width = availableHeight / 2
         let canvasFrame = CGRect(
             x: (view.bounds.width - width) / 2,
-            y: topInset, // Use the topInset to add margin from the notch
+            y: 0,
             width: width,
             height: availableHeight
         )
+        
         canvasView.frame = canvasFrame
-        // Create and add a transparent pattern background view
-        let patternView = UIView(frame: canvasView.bounds)
-        patternView.backgroundColor = UIColor(patternImage: createTransparentPattern())
-        patternView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        
-        // Insert the pattern view below the drawing layer
-        if let drawingView = canvasView.subviews.first {
-            canvasView.insertSubview(patternView, belowSubview: drawingView)
-        } else {
-            canvasView.addSubview(patternView)
-        }
-        
+
+        // Set the frame of patternView to match canvasView but keep it outside the ScrollView
+        patternView.frame = canvasFrame
+
+        // Draw text on the patternView if needed
         drawText(on: patternView)
     }
-    
     func drawText(on view: UIView) {
         let text = "Drawing direction ->"
         let textColor = UIColor(hex: "#cccccc")

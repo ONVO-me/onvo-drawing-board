@@ -55,6 +55,15 @@ public class OnvoDrawingBoardModule: Module {
             }
         }
 
+        Function("saveImageToPhotos") {
+            DispatchQueue.main.async {
+                if let drawingView = DrawingViewRepresentable.currentInstance {
+                    drawingView.saveImageToPhotos()
+                }
+            }
+        }
+        
+
         Function("saveDrawingDraft") {
             DispatchQueue.main.async {
                 if let drawingView = DrawingViewRepresentable.currentInstance {
@@ -62,12 +71,25 @@ public class OnvoDrawingBoardModule: Module {
                 }
             }
         }
-        Function("saveDrawing") { (uploadUrlString: String) in
-            DispatchQueue.main.async {
-                if let drawingView = DrawingViewRepresentable.currentInstance {
-                    drawingView.saveDrawing(uploadUrlString: uploadUrlString)
+        
+AsyncFunction("saveDrawing") { (uploadUrlString: String, uploadToken: String) async throws -> String in
+    return try await withCheckedThrowingContinuation { continuation in
+        DispatchQueue.main.async {
+            if let drawingView = DrawingViewRepresentable.currentInstance {
+                drawingView.saveDrawing(uploadUrlString: uploadUrlString, uploadToken: uploadToken) { responseText in
+                    if let responseText = responseText {
+                        continuation.resume(returning: responseText)
+                    } else {
+                        continuation.resume(throwing: NSError(domain: "UPLOAD_FAILED", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to upload drawing"]))
+                    }
                 }
+            } else {
+                continuation.resume(throwing: NSError(domain: "NO_DRAWING_VIEW", code: 2, userInfo: [NSLocalizedDescriptionKey: "No drawing view found"]))
             }
         }
+    }
+}
+
+
     }
 }
