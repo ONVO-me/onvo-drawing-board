@@ -1,16 +1,11 @@
 import React, { useEffect } from 'react';
 import { Alert, SafeAreaView, StyleSheet } from 'react-native';
-import OnvoDrawingBoardView,{saveDrawing, isDrawingTooSimple} from 'onvo-drawing-board';
+import OnvoDrawingBoardView, { undoAction } from 'onvo-drawing-board';
 
 export default function App() {
   useEffect(() => {
-    const func = async () => {
-      console.log(isDrawingTooSimple())
-     const response = await saveDrawing('https://cdn.onvo.me/api/ios/','da')
-     Alert.alert('tecccst',response)
-    }
-    func()
-  },[])
+    undoAction()
+  }, [])
   return (
     <SafeAreaView style={styles.container}>
       <OnvoDrawingBoardView
