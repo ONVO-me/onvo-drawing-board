@@ -35,6 +35,6 @@ class OnvoDrawingBoardView(context: Context, appContext: AppContext) : ExpoView(
     }
 
     fun updateRenderer() {
-        drawingView.updateRenderer()
+        // drawingView.updateRenderer()
     }
 }

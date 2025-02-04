@@ -2,7 +2,7 @@ package com.ttv.drawingboard.drawing.brushtool.data
 
 import android.content.res.Resources
 import android.graphics.BitmapFactory
-import com.ttv.drawingboard.R
+// import com.ttv.drawingboard.R
 import com.ttv.drawingboard.drawing.brushtool.data.Brush.*
 import com.ttv.drawingboard.drawing.brushtool.model.BrushConfig
 import com.ttv.drawingboard.drawing.brushtool.model.BrushStamp.*
@@ -28,7 +28,7 @@ class BrushesRepository(
 
     private fun createPencilBrushConfig(): BrushConfig {
         return BrushConfig().apply {
-            stamp = createBrushStamp(R.drawable.stamp_pencil)
+            // stamp = createBrushStamp(R.drawable.stamp_pencil)
             size = 0.1f
             spacing = 0.15f
             rotationRandomness = 1f
@@ -48,7 +48,7 @@ class BrushesRepository(
 
     private fun createAirBrushBrushConfig(): BrushConfig {
         return BrushConfig().apply {
-            stamp = createBrushStamp(R.drawable.stamp_airbrush)
+            // stamp = createBrushStamp(R.drawable.stamp_airbrush)
             size = 0.2f
             spacing = 0.1f
         }
@@ -56,7 +56,7 @@ class BrushesRepository(
 
     private fun createMarkerBrushConfig(): BrushConfig {
         return BrushConfig().apply {
-            stamp = createBrushStamp(R.drawable.stamp_marker)
+            // stamp = createBrushStamp(R.drawable.stamp_marker)
             size = 0.4f
             spacing = 0.15f
             flow = 0.2f
@@ -72,7 +72,7 @@ class BrushesRepository(
 
     private fun createSoftEraserBrushConfig(): BrushConfig {
         return BrushConfig().apply {
-            stamp = createBrushStamp(R.drawable.stamp_airbrush)
+            // stamp = createBrushStamp(R.drawable.stamp_airbrush)
             size = 0.2f
             spacing = 0.15f
             flow = 0.25f
@@ -84,7 +84,7 @@ class BrushesRepository(
 
     private fun createPen1BrushConfig() : BrushConfig {
         return BrushConfig().apply {
-            stamp = createBrushStamp(R.drawable.aaa)
+            // stamp = createBrushStamp(R.drawable.aaa)
             size = 0.04f
             spacing = 0.15f
             rotationRandomness = 1f

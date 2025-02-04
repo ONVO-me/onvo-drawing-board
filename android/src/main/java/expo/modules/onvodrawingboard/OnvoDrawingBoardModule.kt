@@ -13,29 +13,35 @@ class OnvoDrawingBoardModule : Module() {
         Name("OnvoDrawingBoard")
 
         Constants(
-            "PI" to Math.PI // Example constant, can be removed if not needed
+            "PI" to Math.PI 
         )
 
-        // Define events that the module can send to JavaScript
-        Events("onChange", "onTouchEvent")
 
-        // Example synchronous function
-        Function("hello") {
-            "Hello from OnvoDrawingBoardModule!"
+        Function("undoAction") {
+           
         }
 
-        // Example asynchronous function
-        AsyncFunction("resetDrawing") { viewTag: Int ->
-            // Find the view by its tag and reset its transformation
-            val view = appContext.findView<OnvoDrawingBoardView>(viewTag)
-            view?.resetTransformation()
+        Function("redoAction") {
+           
         }
 
-        AsyncFunction("getDrawingAsBase64") { viewTag: Int ->
-            // Find the view by its tag and capture its drawing as a Base64-encoded image
-            val view = appContext.findView<OnvoDrawingBoardView>(viewTag)
-            view?.getDrawingAsBase64()
+        Function("toggleToolPickerVisibility") {
+             // toggle tools here
         }
+
+        Function("saveImageToPhotos") {
+            // save image to photos
+        }
+        
+       Function("isDrawingTooSimple") { 
+        // return bool if drawing is too small
+       }
+        
+       AsyncFunction("getDrawing") {
+        // return base 64
+      }
+
+
 
         // Define the native view component
         View(OnvoDrawingBoardView::class) {
