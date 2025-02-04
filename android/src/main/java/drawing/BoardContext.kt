@@ -31,7 +31,7 @@ class BoardContext internal constructor() {
     var brushConfig = BrushConfig()
     var brushColor = 0xff2187bb.toInt()
     var rotationEnabled = false
-    internal var backgroundColor = Color.TRANSPARENT
+    internal var backgroundColor = Color.RED
 
     fun setRasm(
         drawingWidth: Int,
